@@ -1,2 +1,2 @@
 # Spartan
-General purpose Hierarchical Bayesian Inference for supernova cosmology
+Spartan does Hierarchical Bayesian Inference for supernova cosmology, without much fluff.
