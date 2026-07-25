@@ -16,7 +16,7 @@ class SpartanLikelihood(ck.Module):
     ):
         super().__init__()
         self.cosmology = cosmology
-        self.like_fn = like_fn  # f(z, mu, args) -> log_likelihood
+        self.like_fn = like_fn  # f(z-mu, args) -> log_likelihood
         self.like_fn_args = like_fn_args  # (Nsn, Nargs)
         self.z_max = z_max
         self.vlike_fn = jax.jit(
@@ -32,7 +32,7 @@ class SpartanLikelihood(ck.Module):
     def log_likelihood(self):
         z_model = jnp.linspace(0.001, self.z_max, 100)
         mu_model = 5 * jnp.log10(jax.vmap(self.cosmology.luminosity_distance)(z_model)) - 5
-        ll = self.vlike_fn(z_model, mu_model, self.like_fn_args)
+        ll = self.vlike_fn(jnp.stack((z_model, mu_model), axis=1), self.like_fn_args)
         ll = jnp.sum(jax.scipy.special.logsumexp(ll, axis=0))
 
         logP_S_C = self.like_fn_args.shape[0] * self.logP_S_C()
