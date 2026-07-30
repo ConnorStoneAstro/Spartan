@@ -49,8 +49,8 @@ def kde_like_fn(zmu, args):
     Returns:
         log_likelihood: log likelihood value
     """
-    zmu_samples = args[0]
-    kde_sigma = args[1]
+    zmu_samples = args[0]  # (N, 2) array of samples from the KDE
+    kde_sigma = args[1]  # standard deviation of the KDE
     # Compute the KDE log likelihood
     diff = zmu - zmu_samples
     exponent = -0.5 * jnp.sum((diff / kde_sigma) ** 2, axis=1)
