@@ -2,14 +2,14 @@ import jax.numpy as jnp
 import jax
 
 
-def gaussian_like_fn(zmu, args):
-    """Gaussian likelihood function, not including covariance.
+def gaussian_ll_fn(zmu, args):
+    """Gaussian log likelihood function, not including covariance.
     No normalization for the variance is included, as it is not needed for the
     likelihood ratio.
 
     Args:
         zmu: redshift and distance modulus vector
-        args: list containing mean and variance
+        args: list containing mean and variance vectors
 
     Returns:
         log_likelihood: log likelihood value
@@ -19,14 +19,13 @@ def gaussian_like_fn(zmu, args):
     return -0.5 * jnp.sum((zmu - mean) ** 2 / var)
 
 
-def gaussian_cov_like_fn(zmu, args):
-    """
-    Gaussian likelihood function with covariance matrix. No normalization for
+def gaussian_cov_ll_fn(zmu, args):
+    """Gaussian log likelihood function with covariance matrix. No normalization for
     the covariance is included, as it is not needed for the likelihood ratio.
 
     Args:
         zmu: redshift and distance modulus vector
-        args: list containing mean and covariance matrix
+        args: list containing mean vector and covariance matrix
 
     Returns:
         log_likelihood: log likelihood value
@@ -37,8 +36,8 @@ def gaussian_cov_like_fn(zmu, args):
     return -0.5 * (jnp.dot(diff.T, jnp.dot(inv_cov, diff)))
 
 
-def kde_like_fn(zmu, args):
-    """KDE likelihood function, not including normalization.
+def kde_ll_fn(zmu, args):
+    """KDE log likelihood function, not including normalization.
     No normalization for the variance is included, as it is not needed for the
     likelihood ratio.
 

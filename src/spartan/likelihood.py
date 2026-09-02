@@ -3,6 +3,7 @@ from abc import abstractmethod
 import caskade as ck
 import jax.numpy as jnp
 import jax
+from jaxtyping import PyTree
 import cosmographi as cg
 
 
@@ -10,18 +11,25 @@ class SpartanLikelihood(ck.Module):
     def __init__(
         self,
         cosmology: cg.Cosmology,
-        like_fn: Callable,
-        like_fn_args: jnp.array,
+        ll_fn: Callable,
+        ll_fn_args: PyTree,
+        z_min: float = 0.001,
         z_max: float = 2.0,
+        z_steps: int = 1000,
     ):
         super().__init__()
         self.cosmology = cosmology
-        self.like_fn = like_fn  # f(z-mu vec, args) -> log_likelihood
-        self.like_fn_args = like_fn_args  # (Nsn, Nargs)
+        self.ll_fn = ll_fn  # f(z-mu vec, args) -> log_likelihood
+        self.ll_fn_args = ll_fn_args  # PyTree, elements vectorized on first axis
+        n_sn = list(jax.tree.map(lambda x: x.shape[0], ll_fn_args))
+        assert all(
+            n_sn[0] == n for n in n_sn
+        ), "All elements in ll_fn_args must have the same length first dimension"
+        self.n_sn = n_sn[0]
+        self.z_min = z_min
         self.z_max = z_max
-        self.vlike_fn = jax.jit(
-            jax.vmap(jax.vmap(self.like_fn, in_axes=(None, None, 0)), in_axes=(0, 0, None))
-        )
+        self.z_steps = z_steps
+        self.vll_fn = jax.jit(jax.vmap(jax.vmap(self.ll_fn, in_axes=(None, 0)), in_axes=(0, None)))
 
     @abstractmethod
     def logP_S_C(self):
@@ -30,12 +38,12 @@ class SpartanLikelihood(ck.Module):
 
     @ck.forward
     def log_likelihood(self):
-        z_model = jnp.linspace(0.001, self.z_max, 1000)
+        z_model = jnp.linspace(self.z_min, self.z_max, self.z_steps)
         mu_model = 5 * jnp.log10(jax.vmap(self.cosmology.luminosity_distance)(z_model)) - 5
-        ll = self.vlike_fn(jnp.stack((z_model, mu_model), axis=1), self.like_fn_args)
+        ll = self.vll_fn(jnp.stack((z_model, mu_model), axis=1), self.ll_fn_args)
         ll = jnp.sum(jax.scipy.special.logsumexp(ll, axis=0))
 
-        logP_S_C = self.like_fn_args.shape[0] * self.logP_S_C()
+        logP_S_C = self.n_sn * self.logP_S_C()
 
         return ll - logP_S_C
 
