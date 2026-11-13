@@ -83,7 +83,7 @@ def importance_weights(samples, Omega_m, w0, wa=0.0):
 
 
 def main():
-    # Build a 2x3 parent grid where upper-middle and upper-right are each split into 2x1.
+    # Build a 2x3 parent grid where upper-middle is split into selected/not-selected examples.
     fig = plt.figure(figsize=(12, 8), constrained_layout=True)
 
     parent = fig.add_gridspec(
@@ -97,6 +97,7 @@ def main():
 
     # Main-level panels.
     ax_ul = fig.add_subplot(parent[0, 0])
+    ax_ur = fig.add_subplot(parent[0, 2])
     ax_ll = fig.add_subplot(parent[1, 0])
     ax_lm = fig.add_subplot(parent[1, 1])
     ax_lr = fig.add_subplot(parent[1, 2])
@@ -110,16 +111,6 @@ def main():
     )
     ax_ur_00 = fig.add_subplot(nested_um[0, 0])
     ax_ur_10 = fig.add_subplot(nested_um[1, 0])
-
-    # Upper-right panel split into a nested 2x1 grid.
-    nested_ur = parent[0, 2].subgridspec(
-        nrows=2,
-        ncols=1,
-        wspace=0.04,
-        hspace=0.04,
-    )
-    ax_ur_01 = fig.add_subplot(nested_ur[0, 0])
-    ax_ur_11 = fig.add_subplot(nested_ur[1, 0])
 
     # Upper left figure
     # ----------------------------------------------------------------
@@ -139,18 +130,20 @@ def main():
     )
     xlims = (jnp.min(sims["z_true"]), jnp.max(sims["z_true"]))
     ylims = (jnp.min(sims["m_true"]), jnp.max(sims["m_true"]))
-    ax_ul.scatter(sims["z_true"], sims["m_true"], s=5, c="k", linewidth=0)
+    ax_ul.scatter(sims["z_true"], sims["m_true"], s=5, c="k", linewidth=0, label="simulated SNe")
     ax_ul.plot(
         jnp.sort(sims["z_true"]),
         sims["Mmean"] + sims["mu_true"][jnp.argsort(sims["z_true"])],
         c="tab:orange",
         linestyle="--",
         lw=2,
+        label="fiducial model",
     )
     ax_ul.set_xlim(xlims)
     ax_ul.set_ylim(ylims)
-    ax_ul.set_xlabel("Redshift (z)")
-    ax_ul.set_ylabel("Apparent Magnitude (m)")
+    ax_ul.set_xlabel("True redshift ($z_\\mathrm{true}$)")
+    ax_ul.set_ylabel("True apparent magnitude ($m_\\mathrm{true}$)")
+    ax_ul.legend(frameon=False, loc="upper left")
     ax_ul.set_title("Fiducial Sample: $D_i \\sim P(D_i|\\Omega^*)$")
 
     # Upper middle figure
@@ -162,13 +155,22 @@ def main():
     connect_ax = []
     connect_ax.append(ax_ur_00)
     sim_points.append((sims["z_true"][~sims["select"]][0], sims["m_true"][~sims["select"]][0]))
-    connect_ax.append(ax_ur_01)
-    sim_points.append((sims["z_true"][~sims["select"]][1], sims["m_true"][~sims["select"]][1]))
     connect_ax.append(ax_ur_10)
     sim_points.append((sims["z_true"][sims["select"]][0], sims["m_true"][sims["select"]][0]))
-    connect_ax.append(ax_ur_11)
-    sim_points.append((sims["z_true"][sims["select"]][1], sims["m_true"][sims["select"]][1]))
     for sim, ax_lc in zip(sim_points, connect_ax):
+        connector = ConnectionPatch(
+            xyA=sim,
+            coordsA=ax_ul.transData,
+            xyB=(0.0, 0.95),
+            coordsB=ax_lc.transAxes,
+            color="white",
+            linestyle="-",
+            lw=3,
+            # alpha=0.5,
+            clip_on=False,
+            # zorder=10,
+        )
+        fig.add_artist(connector)
         connector = ConnectionPatch(
             xyA=sim,
             coordsA=ax_ul.transData,
@@ -188,52 +190,115 @@ def main():
     print("Selection examples")
     x = np.linspace(-1, 1, 7)
     np.random.seed(43)
-    for subax, scale in zip([ax_ur_00, ax_ur_01, ax_ur_10, ax_ur_11], [0.8, 0.1, 1.4, 2.5]):
+    for subax, scale in zip([ax_ur_00, ax_ur_10], [0.8, 1.4]):
         subax.errorbar(
             x,
             scale * np.exp(-0.5 * x**2 / 0.5**2) + np.random.normal(scale=0.2, size=len(x)),
             yerr=0.2,
             fmt="o",
             c="tab:green" if scale > 1 else "tab:red",
+            label="light curve",
         )
-        subax.axhline(1.0, linestyle="--", c="grey")
+        subax.axhline(1.0, linestyle="--", c="grey", label="Detection threshold")
         subax.set_xlim([-1.05, 1.05])
         subax.set_ylim([0, 3])
         subax.set_xticks([])
         subax.set_yticks([])
+        if scale < 1:
+            subax.legend(frameon=False, loc="upper left")
     ax_ur_00.set_title("Not selected: $\\mathbb{S}_i = 0$")
-    ax_ur_01.set_title("Not selected: $\\mathbb{S}_i = 0$")
     ax_ur_10.set_title("Selected: $\\mathbb{S}_i = 1$")
-    ax_ur_11.set_title("Selected: $\\mathbb{S}_i = 1$")
 
-    # Lower left figure
+    # Upper right figure
     # ----------------------------------------------------------------
-    print("Selected sims")
-    ax_ll.scatter(
+    print("Selected and not selected sims")
+    ax_ur.scatter(
+        sims["z_true"][~sims["select"]],
+        sims["m_true"][~sims["select"]],
+        s=5,
+        c="tab:red",
+        linewidth=0,
+        label="Not selected",
+    )
+    ax_ur.scatter(
         sims["z_true"][sims["select"]],
         sims["m_true"][sims["select"]],
         s=5,
-        # alpha=0.5,
         c="tab:green",
         linewidth=0,
+        label="Selected",
     )
-    ax_ll.plot(
+    ax_ur.plot(
         jnp.sort(sims["z_true"]),
         sims["Mmean"] + sims["mu_true"][jnp.argsort(sims["z_true"])],
         c="tab:orange",
         linestyle="--",
         lw=2,
     )
-    ax_ll.set_xlim(xlims)
-    ax_ll.set_ylim(ylims)
-    ax_ll.set_xlabel("Redshift (z)")
-    ax_ll.set_ylabel("Apparent Magnitude (m)")
-    ax_ll.set_title("Selected Sample: $P(\\mathbb{S}_i|D_i)$")
+    ax_ur.set_xlim(xlims)
+    ax_ur.set_ylim(ylims)
+    ax_ur.set_xlabel("True redshift ($z_\\mathrm{true}$)")
+    ax_ur.set_ylabel("True apparent magnitude ($m_\\mathrm{true}$)")
+    ax_ur.set_title("Selection: $P(\\mathbb{S}_i|D_i)$")
+    ax_ur.legend(frameon=False, markerscale=2)
+
+    # Lower left figure
+    # ----------------------------------------------------------------
+    print("weight calculation")
+    Om_ref = 0.36
+    w0_ref = -0.8
+    z_ref = 1.3
+    M_scan = jnp.linspace(sims["Mmean"] - 1.0, sims["Mmean"] + 1.4, 500)
+
+    cosmo_fid = cg.Cosmology()
+    cosmo_fid.Omega_m = sims["Omega_m"]
+    cosmo_fid.w0 = sims["w0"]
+    cosmo_fid.wa = sims["wa"]
+
+    cosmo_new = cg.Cosmology()
+    cosmo_new.Omega_m = Om_ref
+    cosmo_new.w0 = w0_ref
+    cosmo_new.wa = 0.0
+    mu_ref_fid = 5 * jnp.log10(cosmo_fid.luminosity_distance(z_ref)) - 5
+    mu_ref_new = 5 * jnp.log10(cosmo_new.luminosity_distance(z_ref)) - 5
+    M_implied_new = M_scan + mu_ref_fid - mu_ref_new
+
+    fid_gaussian = jax.scipy.stats.norm.pdf(M_scan, loc=sims["Mmean"], scale=sims["Mstd"])
+    new_gaussian = jax.scipy.stats.norm.pdf(M_implied_new, loc=sims["Mmean"], scale=0.1)
+    weight_curve = new_gaussian / fid_gaussian
+    print(jnp.max(weight_curve))
+    ax_ll.plot(
+        M_scan,
+        fid_gaussian,  # / jnp.max(fid_gaussian),
+        c="tab:orange",
+        lw=2,
+        label="Fiducial $M$ dist",
+    )
+    ax_ll.plot(
+        M_scan,
+        new_gaussian,  # / jnp.max(new_gaussian),
+        c="tab:blue",
+        lw=2,
+        label="Proposal $M$ dist",
+    )
+    ax_ll.plot(
+        M_scan,
+        weight_curve,  # / jnp.max(weight_curve),
+        c="k",
+        lw=2,
+        linestyle="--",
+        label="Importance weight",
+    )
+    ax_ll.set_xlim(M_scan[0], M_scan[-1])
+    # ax_ll.set_ylim(-0.05, 1.3)
+    ax_ll.invert_xaxis()
+    ax_ll.set_xlabel("True absolute magnitude ($M_\\mathrm{true}$)")
+    ax_ll.set_ylabel("Density or Weight")
+    ax_ll.set_title("Importance Weight at $z_\\mathrm{true}=1.3$")
+    ax_ll.legend(frameon=False, loc="upper left")
 
     # Lower middle figure
     # ----------------------------------------------------------------
-    Om_ref = 0.36
-    w0_ref = -0.8
     print("importance weights")
     weights, mu_new = importance_weights(sims, Omega_m=Om_ref, w0=w0_ref, wa=0.0)
     weights = weights[sims["select"]]
@@ -261,8 +326,8 @@ def main():
     )
     ax_lm.set_xlim(xlims)
     ax_lm.set_ylim(ylims)
-    ax_lm.set_xlabel("Redshift (z)")
-    ax_lm.set_ylabel("Apparent Magnitude (m)")
+    ax_lm.set_xlabel("True redshift ($z_\\mathrm{true}$)")
+    ax_lm.set_ylabel("True apparent magnitude ($m_\\mathrm{true}$)")
     ax_lm.set_title("Importance Weights: $\\frac{P(D_i|\\Omega)}{P(D_i|\\Omega^*)}$")
     # Lower right figure
     # ----------------------------------------------------------------
@@ -287,20 +352,20 @@ def main():
             color="tab:gray",
             linestyle="--",
             lw=1.5,
-            alpha=0.5,
+            # alpha=0.5,
             clip_on=False,
-            zorder=10,
+            zorder=11,
         )
         fig.add_artist(connector)
 
     ax_lr.set_xlabel("Omega_m")
     ax_lr.set_ylabel("w0")
-    ax_lr.set_title("Marginal Detection Probability: $P(\\mathbb{S}|\\Omega)$")
+    ax_lr.set_title("Marginal Selection Probability: $P(\\mathbb{S}|\\Omega)$")
 
     # Constrained layout plus per-axis titles can make stacked subpanels slightly taller.
     # Squish all top-row subpanels so their top/bottom align with the top-left panel.
     fig.canvas.draw()
-    ur_axes = [ax_ur_00, ax_ur_01, ax_ur_10, ax_ur_11]
+    ur_axes = [ax_ur_00, ax_ur_10]
     top_ref = ax_ul.get_position()
     ur_y0 = min(ax.get_position().y0 for ax in ur_axes)
     ur_y1 = max(ax.get_position().y1 for ax in ur_axes)

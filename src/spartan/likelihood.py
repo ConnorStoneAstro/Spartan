@@ -50,3 +50,55 @@ class SpartanLikelihood(ck.Module):
     @ck.forward
     def neg_log_likelihood(self):
         return -self.log_likelihood()
+
+
+class SpartanLikelihood_GaussianMu(ck.Module):
+    def __init__(
+        self,
+        cosmology: cg.Cosmology,
+        spec_z: jnp.ndarray,  # observed redshifts of the supernovae
+        mu_mean: jnp.ndarray,  # mean of the observed distance modulus per SN
+        mu_var: jnp.ndarray,  # variance of the observed distance modulus per SN
+        M0: float,  # Avg absolute magnitude of the supernovae
+        model_M_scat: float,  # scatter of the true absolute magnitude of the sim SN
+        fiducial_M_scat: float,  # fiducial scatter of the true absolute magnitude of the sim SN
+        fiducial_true_M_abs: jnp.ndarray,  # fiducial true absolute magnitude of the sim SN
+        fiducial_true_z: jnp.ndarray,  # fiducial true redshift of the sim SN
+        fiducial_true_mu: jnp.ndarray,  # fiducial true distance modulus of the sim SN
+    ):
+        super().__init__()
+        self.cosmology = cosmology
+        self.spec_z = spec_z
+        self.mu_mean = mu_mean
+        self.mu_var = mu_var
+
+        # Selection function quantities
+        self.model_M_scat = model_M_scat
+        self.fiducial_true_z = fiducial_true_z
+        self.fiducial_true_mu = fiducial_true_mu
+        self.import_denom = -0.5 * (fiducial_true_M_abs - M0) ** 2 / fiducial_M_scat**2
+
+    @abstractmethod
+    def logP_S_C(self):
+        """Return the log marginal probability of the selection given cosmology."""
+        mu_model = (
+            5 * jnp.log10(jax.vmap(self.cosmology.luminosity_distance)(self.fiducial_true_z)) - 5
+        )
+        import_numer = -0.5 * (self.fiducial_true_mu - mu_model) ** 2 / self.model_M_scat**2
+        logP_S_C = jax.scipy.special.logsumexp(import_numer - self.import_denom) - jnp.log(
+            mu_model.shape[0]
+        )
+        return logP_S_C
+
+    @ck.forward
+    def log_likelihood(self):
+        mu_model = 5 * jnp.log10(jax.vmap(self.cosmology.luminosity_distance)(self.spec_z)) - 5
+        ll = -0.5 * jnp.sum(((self.mu_mean - mu_model) ** 2) / self.mu_var)
+
+        logP_S_C = self.spec_z.shape[0] * self.logP_S_C()
+
+        return ll - logP_S_C
+
+    @ck.forward
+    def neg_log_likelihood(self):
+        return -self.log_likelihood()
